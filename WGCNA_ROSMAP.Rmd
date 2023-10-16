@@ -1,0 +1,620 @@
+---
+title: "`WGCNA Analysis For `r params$projectName``"
+author: "Raymond Yuan SHANG"
+date: "`r params$date`"
+output:
+  html_document:
+    standalone: TRUE
+    embed-resources: TRUE
+    df_print: paged
+always_allow_html: yes
+params:
+  projectName: ROSMAP
+  date: 10/08/2023
+  sampleInfo: sampleInfo.xlsx
+  dataDir: ~/Dropbox/human/ROSMAP/RNASeq
+  groupName: NCI
+  groups: ["NCI.F.APOE33","NCI.F.APOE23","NCI.M.APOE33", "NCI.M.APOE34","NCI.M.APOE23","NCI.F.APOE34"]
+  powerEstimate: 0
+  thresholdZ: -2.5
+  MEDissThres: 0.4
+  maptype: signed
+  outputDir: "."
+  wdir: "."
+
+fontsize: 11pt
+geometry: margin=1in
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+#knitr::opts_chunk$set(root.dir = wdir)
+
+#opts_knit$set(root.dir = 'c:/Users/kwilliams/git/ProjectX')
+#knitr::opts_knit$set(root.dir = '/tmp')
+#knitr::opts_knit$get(root.dir)
+#setwd(wdir)
+#getwd()
+#getwd()
+#Settings
+options(stringsAsFactors=FALSE)
+options(warn=-1)
+options(DT.options = list(columnDefs = list(list(className = 'dt-center', targets = "_all"))))
+
+```
+
+
+```{r}
+#rm(list=ls())
+suppressPackageStartupMessages({
+# Load R packages required
+# For data processing
+library("readxl")
+library("tximport")
+library("DESeq2")
+library("writexl")
+#library("apeglm")
+library("ashr")
+# For plotting
+library("ggplot2")
+library("gridExtra")
+library("corrplot")
+library("RColorBrewer")
+library("pheatmap")
+library("gplots")
+library("ggh4x")
+## For PCA
+library("FactoMineR")
+#library("")
+# For stringr wrangling
+library("stringr")
+library("tidyverse")
+# For GSEA analysis and visualization
+library("msigdbr")
+library("org.Rn.eg.db")
+library("org.Mm.eg.db")
+library("org.Hs.eg.db")
+library("clusterProfiler")
+library("ggstance")
+# For rendering
+library("htmltools")
+library("DT")
+  
+# Others
+library("sva") #In case to remove unknown batch effects using SVA
+library("vsn")
+library("hexbin")
+library("factoextra")
+  
+#WGCNA
+library("WGCNA")
+library("cluster")
+library("flashClust")
+library("openxlsx")
+})
+
+```
+
+```{r}
+# Check output dir
+outputDir <- params$outputDir
+dataFile <- params$dataFile
+projectName <- params$projectName
+
+dataDir <- params$dataDir
+wdir <- params$wdir
+powerEstimate <- params$powerEstimate
+thresholdZ.k <- params$thresholdZ
+MEDissThres <- params$MEDissThres
+maptype <- params$maptype
+current_groupname <- params$groupName
+current_groups <- params$groups
+```
+
+```{r,include=FALSE}
+#Set plotting THeme, general
+theme_set(theme_bw()) + theme_update(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),plot.title = element_text(hjust = 0.5),legend.title=element_blank()) #legend.position = c(0.8, 0.8),
+```
+
+
+```{r}
+wrapper <- function(x, ...) 
+{
+  paste(strwrap(x, ...), collapse = "\n")
+}
+```
+
+
+
+```{r}
+## set dynamic render fig size in chunk
+figNum=1
+subchunkify <- function(g, fig_height=7, fig_width=5,chunk_name="plot") {
+  g_deparsed <- paste0(deparse(
+    function() {g}
+  ), collapse = '')
+  chunk_name <- paste0(chunk_name,".",figNum)
+  sub_chunk <- paste0("\n`","``{r ",chunk_name, 
+                      ", fig.height=", fig_height, 
+                      ", fig.width=", fig_width, 
+                      ", echo=FALSE}",
+                      "\n(", 
+                        g_deparsed
+                        , ")()",
+                      "\n`","``\n")
+  figNum <<- figNum+1
+  if(figNum > 100000){figNum<<-1}
+  cat(knitr::knit(text = knitr::knit_expand(text = sub_chunk), quiet = TRUE))
+}
+
+```
+
+```{r, include=FALSE}
+#Magic:https://github.com/rstudio/DT/issues/67#issuecomment-426329442
+#To display DT,figs in loop
+#library(DT)
+
+#datatable(iris)
+DT::datatable(matrix())
+
+```
+
+```{r}
+
+wp2gene_GO <- msigdbr(species = "Homo sapiens", category = "C5") %>% #,subcategory = "GO:BP"
+  dplyr::select(gs_name, gene_symbol)%>% dplyr::distinct(gs_name, gene_symbol)
+colnames(wp2gene_GO)=c("term","gene")
+```
+
+
+```{r}
+#Test
+dataFile = file.path (dataDir,"lcpm_WithoutFactors_ROSMAP.Rdata")#"~/Dropbox/human/ROSMAP/RNASeq/lcpm_WithoutFactors_ROSMAP.Rdata"
+s2cFile = file.path(dataDir,"x_normalized_ROSMAP.Rdata")
+```
+
+```{r}
+
+#save(lcpm_WithoutFactors,file="~/Dropbox/human/ROSMAP/RNASeq/lcpm_WithoutFactors.Rdata")
+#save(y,file="~/Dropbox/human/ROSMAP/RNASeq/y.Rdata")
+current_area="ROSMAP" #
+#current_groupname="NCI"
+#current_groups=c("NCI.F.APOE33","NCI.F.APOE23","NCI.M.APOE33", "NCI.M.APOE34","NCI.M.APOE23","NCI.F.APOE34")
+#c("NCI.F.APOE33","NCI.F.APOE23","NCI.M.APOE33", "NCI.M.APOE34","NCI.M.APOE23","NCI.F.APOE34") #NCI
+#c("MCI.F.APOE33","MCI.F.APOE23","MCI.M.APOE33", "MCI.M.APOE34","MCI.M.APOE23","MCI.F.APOE34") #MCI
+#c("AD.F.APOE33","AD.F.APOE23","AD.M.APOE33", "AD.M.APOE34","AD.M.APOE23","AD.F.APOE34") #AD
+#c()
+
+# [1] NCI.F.APOE33 NCI.F.APOE23 MCI.F.APOE33 NCI.M.APOE33 NCI.M.APOE34 AD.M.APOE33  AD.F.APOE34  AD.M.APOE34  MCI.M.APOE33 NCI.M.APOE23
+#[11] MCI.M.APOE34 MCI.M.APOE23 AD.F.APOE33  MCI.F.APOE23 MCI.F.APOE34 AD.M.APOE23  AD.F.APOE23  NCI.F.APOE34
+#current_area="TCX"
+
+load(dataFile)
+load(s2cFile)
+genes_detected_ROSMAP <- rownames(lcpm_WithoutFactors)
+s2c <- y$samples
+rownames(s2c) <- paste0("X",s2c$rna_id)
+sum(rownames(s2c) != colnames(lcpm_WithoutFactors)) #Should be 0
+sum(y$genes$ENSEMBL != genes_detected_ROSMAP) #should be 0
+rownames(lcpm_WithoutFactors) <- y$genes$HGNC_SYMBOL
+genes_detected_ROSMAP <- rownames(lcpm_WithoutFactors)
+
+```
+
+# WGCNA network analysis
+
+```{r}
+#Transpose expression data to WGCNA format, genes as collumns and samples as rows.
+s2c_WGCNA <- s2c[s2c$groupCom %in% current_groups,]
+
+data_WGCNA <- as.data.frame(t(lcpm_WithoutFactors[,rownames(s2c_WGCNA)]))
+
+```
+
+
+## 1. Clustering data based on distance, to check potential outliers
+```{r}
+# sample network based on squared Euclidean distance
+# note that we transpose the data
+
+A=adjacency(t(data_WGCNA),type="distance")
+# this calculates the whole network connectivity
+k=as.numeric(apply(A,2,sum))-1
+# standardized connectivity
+Z.k=scale(k)
+
+# Designate samples as outlying
+# if their Z.k value is below the threshold
+thresholdZ.k=-3 # often -2.5
+print(paste0("threhold for outliers:",thresholdZ.k))
+# the color vector indicates outlyingness (red)
+outlierColor=ifelse(Z.k<thresholdZ.k,"red","black")
+# calculate the cluster tree using flahsClust or hclust
+sampleTree = flashClust(as.dist(1-A), method = "average")
+
+#plot(sampleTree)
+datColors=data.frame(outlierC=outlierColor)
+plotDendroAndColors(sampleTree,groupLabels=names(datColors),colors=datColors,main="Sample dendrogram and trait heatmap")
+
+```
+
+
+```{r}
+outliers <- sampleTree$labels[datColors$outlierC=="red"]
+data_WGCNA <- data_WGCNA[!(rownames(data_WGCNA) %in% outliers),]
+s2c_WGCNA <- s2c_WGCNA[!(rownames(s2c_WGCNA) %in% outliers),]
+
+```
+
+
+## 2. Selection soft threshold beta value via scale free topology, for the co-expression network
+
+```{r}
+# Choose a set of soft thresholding powers
+powers=c(1:25) # in practice this should include powers up to 20.
+# choose power based on SFT criterion
+sft=pickSoftThreshold(data_WGCNA,powerVector=powers,corFnc="bicor",networkType = maptype)
+#sft
+```
+
+### 2.1 Plot the SFT results:
+```{r add.layer,  echo=-1}
+#Digression: if you want to pick a soft threshold for a signed network write
+#sft=pickSoftThreshold(data_ROSMAPmt_NCI2,powerVector=powers, networkType = "signed")
+# but then you should consider higher powers. Default beta=12.
+names(sft)
+sft["fitIndices"]
+# Plot the results:
+{
+par(mfrow=c(1,2))
+# SFT index as a function of different powers
+plot(sft$fitIndices[,1],-sign(sft$fitIndices[,3])*sft$fitIndices[,2],xlab="Soft Threshold (power)",ylab=paste0("SFT, ",maptype," R^2"),type="n",main=paste("Scale independence"))
+text(sft$fitIndices[,1],-sign(sft$fitIndices[,3])*sft$fitIndices[,2],labels=powers,col="red")
+# this line corresponds to using an R^2 cut-off of h
+abline(h=0.90,col="red")
+# Mean connectivity as a function of different powers
+plot(sft$fitIndices[1:10,1],sft$fitIndices[1:10,5],type="n",
+xlab="Soft Threshold (power)",ylab="Mean Connectivity",main=paste("Mean connectivity"))
+text(sft$fitIndices[,1],sft$fitIndices[,5],labels=powers,col="red")
+}
+```
+
+
+### 2.2 Check β value, whether it fits the scale free assumption
+```{r}
+if(powerEstimate ==0){
+  softPower = sft$powerEstimate
+}else{
+  softPower = powerEstimate
+}
+#softPower=15  #sft$powerEstimate 15 for NCI,
+
+#ADJ1_cor <- abs(WGCNA::cor(data_hypo,use = "p" ))^softPower
+# Genes（<5000）, use the code below：
+#k <- as.vector(apply(ADJ1_cor,2,sum,na.rm=T))
+# Genes（>5000）, use the code below
+k <- softConnectivity(datE=data_WGCNA,power=softPower) 
+{
+sizeGrWindow(10, 5)
+par(mfrow=c(1,2))
+hist(k)
+scaleFreePlot(k,main="Check Scale free topology\n")
+}
+```
+
+## 3. Adjacent Matrix, Module detection based on (1-TOM) and auto dynamic tree cutting
+
+### 3.1 Automatic module detection via dynamic tree cutting
+```{r}
+clusterMethod = "average"
+##  The following Matrix adj are too big (~8G) and can not run in local PC. Need to find some otherway
+adj= adjacency(data_WGCNA,type = maptype, power = softPower,corFnc="bicor");#signed,unsigned
+#turn adjacency matrix into topological overlap to minimize the effects of noise and spurious associations
+TOM=TOMsimilarity(adj,TOMType = maptype); #,networkType = "unsigned"
+
+#Calculating TOM similarity from Expr data directly could save memory because we only need TOM now. still it is ~8G
+#TOM=TOMsimilarityFromExpr(data_hypo,networkType = "unsigned",TOMType = "signed", power = softPower);
+#dim(gene_id)
+gene_symbol <- genes_detected_ROSMAP
+dim(gene_symbol)
+#names(gene_id)
+names(gene_symbol)
+dim(TOM)#15582 15582
+
+length(gene_symbol)
+rownames(TOM) = gene_symbol
+colnames(TOM) = gene_symbol
+dissTOM=1-TOM
+#hierarchical clustering of the genes based on the TOM dissimilarity measure
+geneTree = flashClust(as.dist(dissTOM),method=clusterMethod); #average
+#hierTOM = hclust(as.dist(dissTOM),method="average");
+#plot the resulting clustering tree (dendrogram)
+plot(geneTree, xlab="", sub="",cex=0.3);
+```
+
+
+
+### Gene dendrogram and module colors before merge
+
+```{r}
+# Dynamic cuttings：
+minModuleSize = 30;
+dynamicMods = cutreeDynamic(dendro = geneTree, distM = dissTOM,
+                            deepSplit = 2, pamRespectsDendro = FALSE,
+                            minClusterSize = minModuleSize);
+#table(dynamicMods)
+dynamicColors = labels2colors(dynamicMods)
+#table(dynamicColors)
+#geneTree$labels[dynamicColors=="tan"]
+```
+
+
+```{r}
+# 使用相异度来聚类为gene tree(聚类树)：
+#geneTree = hclust(as.dist(dissTOM), method = "average");
+# Plot the resulting clustering tree (dendrogram)
+#windows()
+# Plot the dendrogram and colors underneath
+{
+pdf(paste0("Gene dendrogram and module colors before merge (",current_groupname,"_",current_area,").pdf"), height=10, width=15)
+plotDendroAndColors(geneTree, dynamicColors, "Dynamic Tree Cut",
+                    dendroLabels = FALSE, hang = 0.03,
+                    addGuide = TRUE, guideHang = 0.05,
+                    main = "Gene dendrogram and module colors before merge")
+dev.off()
+}
+
+```
+
+### 3.2 Calculate the eigen gene for each module, which represents the whole module expression level
+```{r}
+#lapply(data_hypo,as.numeric,2) -> data_hypo
+#as.data.frame(data_hypo) -> data_hypo
+MEList = moduleEigengenes((as.matrix(data_WGCNA)), colors = dynamicColors,softPower=softPower)
+MEs = MEList$eigengenes
+# 计算根据模块特征向量基因计算模块相异度：
+MEDiss = 1-cor(MEs);
+# Cluster module eigengenes
+METree = hclust(as.dist(MEDiss), method = "complete")
+#METree = flashClust(as.dist(MEDiss), method = "average")
+# Plot the result
+
+plotEigengeneNetworks(MEs, 
+                      "Eigengene adjacency heatmap", 
+                      marHeatmap = c(3,4,2,2), 
+                      plotDendrograms = FALSE, 
+                      xLabelsAngle = 90) 
+```
+
+Module Clustering Trees based on module eigen values
+```{r}
+plot(METree, 
+     main = "Clustering of module eigengenes",
+     xlab = "", 
+     sub = "")
+```
+
+### 3.3 Save module genes
+```{r}
+colors_mod <- unique(dynamicColors)
+df_mod <- data.frame(gene=NA,modulecolor=NA)
+for(i in c(1:length(colors_mod))){
+  genes_currentmodule <- geneTree$labels[dynamicColors==colors_mod[i]]
+  df_mod <- rbind(df_mod,data.frame(gene=genes_currentmodule,modulecolor=colors_mod[i]))
+}
+#geneTree$labels[dynamicColors=="tan"]
+df_mod <- df_mod[2:dim(df_mod)[1],]
+write.csv(x=df_mod,file=paste0("modules_",maptype,"_unmerged_functionAnnotation",current_area,"_",current_groupname,".csv"), row.names = FALSE)
+head(df_mod)
+```
+
+### 3.3 Select 400 random genes for the toppology overlap heatmap, deep yellow and red means highly topology overlapped。
+```{r}
+nGenes = length(gene_symbol)
+# toppology overlap heatmap：
+nSelect = 400 
+# For reproducibility, we set the random seed 
+set.seed(10); 
+select = sample(nGenes, size = nSelect); 
+selectTOM = dissTOM[select, select]; 
+# There's no simple way of restricting a clustering tree to a subset of genes, so we must re-cluster. 
+selectTree = hclust(as.dist(selectTOM), method = clusterMethod)#average 
+selectColors = dynamicColors[select]; 
+# Open a graphical window 
+sizeGrWindow(9,9) 
+# Taking the dissimilarity to a power, say 10, makes the plot more informative by effectively changing 
+# the color palette; setting the diagonal to NA also improves the clarity of the plot 
+plotDiss = selectTOM^softPower; 
+diag(plotDiss) = NA; 
+{
+  pdf(paste0("Gene dendrogram and heatmap before merge (",current_groupname,"_",current_area,").pdf"), height=10, width=15)
+
+  TOMplot(plotDiss, 
+        selectTree, 
+        selectColors, 
+        main = "Network heatmap plot, selected genes") 
+  dev.off()
+}
+```
+
+
+
+## 4. Merge close modules
+
+### 4.1 set the MEDissThres as the threshold based on the cluster tree
+
+```{r}
+pdf(paste0("Clustering of module eigengene before merge_",current_groupname,".pdf"), height=10, width=15)
+
+{
+plot(METree, main = "Clustering of module eigengenes",
+     xlab = "", sub = "")
+# We choose a height cut of 0.2, corresponding to correlation of 0.8
+MEDissThres = 0.4
+
+
+# Plot the cut line into the dendrogram
+abline(h=MEDissThres, col = "red")
+}
+dev.off()
+
+```
+
+### 4.2 New Merged Modules
+```{r}
+# Draw a cutting line in the cluster figure
+#abline(h=MEDissThres, col = "red")
+# merge：
+merge_modules = mergeCloseModules(data_WGCNA, dynamicColors, cutHeight = MEDissThres, verbose = 3)
+# new colors：
+mergedColors = merge_modules$colors;
+# new module eigen values：
+mergedMEs = merge_modules$newMEs;
+plotDendroAndColors(geneTree, cbind(dynamicColors, mergedColors),
+                    c("Dynamic Tree Cut", "Merged dynamic"),
+                    dendroLabels = FALSE, hang = 0.03,
+                    addGuide = TRUE, guideHang = 0.05)
+
+
+```
+
+Save the plot
+```{r}
+#pdf("4-Clustering of module eigengene_MCI.pdf", height=6, width=9)
+
+pdf(paste0("Clustering of module eigengene (",current_area,"_",current_groupname,")_sample.pdf"), height=10, width=15)
+plotDendroAndColors(geneTree, cbind( mergedColors),
+                    c( "Module Color"),dendroLabels = FALSE, hang = 0.03,
+                    addGuide = TRUE, guideHang = 0.05)
+dev.off()
+
+```
+
+### 4.3 New Merged Modules
+```{r}
+nGenes = length(gene_symbol)
+# toppology overlap heatmap：
+nSelect = 400 
+# For reproducibility, we set the random seed 
+set.seed(10); 
+select = sample(nGenes, size = nSelect); 
+selectTOM = dissTOM[select, select]; 
+# There's no simple way of restricting a clustering tree to a subset of genes, so we must re-cluster. 
+selectTree = hclust(as.dist(selectTOM), method = clusterMethod)#average 
+selectColors = mergedColors[select]; 
+# Open a graphical window 
+sizeGrWindow(9,9) 
+# Taking the dissimilarity to a power, say 10, makes the plot more informative by effectively changing 
+# the color palette; setting the diagonal to NA also improves the clarity of the plot 
+plotDiss = selectTOM^softPower; 
+diag(plotDiss) = NA; 
+{
+    pdf(paste0("Gene dendrogram and heatmap after merge (",current_area,"_",current_groupname,").pdf"), height=11, width=10)
+    TOMplot(plotDiss, 
+        selectTree, 
+        selectColors, 
+        main = "Network heatmap plot, selected genes") 
+    dev.off()
+}
+
+```
+
+
+### 4.4 Eigen values for merged modules
+```{r}
+MEList_merge = moduleEigengenes((as.matrix(data_WGCNA)), colors = mergedColors)
+MEs = MEList_merge$eigengenes
+# 计算根据模块特征向量基因计算模块相异度：
+MEDiss = 1-cor(MEs);
+# Cluster module eigengenes
+METree = hclust(as.dist(MEDiss), method = "average")
+#METree = flashClust(as.dist(MEDiss), method = "average")
+# Plot the result
+
+plotEigengeneNetworks(MEs, 
+                      "Eigengene adjacency heatmap", 
+                      marHeatmap = c(3,4,2,2), 
+                      plotDendrograms = FALSE, 
+                      xLabelsAngle = 90) 
+```
+
+### 4.5 Module function annotations
+
+```{r}
+unique(mergedColors)
+
+
+colors_mod <- unique(dynamicColors)
+df_mod <- matrix(data=NA,ncol=length(colors_mod),nrow=max(table(dynamicColors)))
+mf_unmerge_dir <- file.path(wdir,"moduleFunctions_unmerge")
+mf_merge_dir <- file.path(wdir,"moduleFunctions_merge")
+if (!dir.exists(mf_unmerge_dir)) {dir.create(mf_unmerge_dir)}#wdir
+if (!dir.exists(mf_merge_dir)) {dir.create(mf_merge_dir)}
+
+
+for(i in 1:length(colors_mod)){
+  col_tmp <- colors_mod[i]
+  genes_tmp <- colnames(data_WGCNA)[dynamicColors == col_tmp]
+  
+  gene_enrichment <- enricher(gene=genes_tmp, TERM2GENE = wp2gene_GO)
+  #head(gene_enrichment)
+  print(paste0("current color: ",col_tmp))
+  print(head(gene_enrichment[,c("ID","p.adjust","Count","geneID")]))
+  write.csv(x=gene_enrichment,file=paste0(mf_unmerge_dir,"/",col_tmp,"_signed_unmerged_functionAnnotation",current_area,"_",current_groupname,".csv"), row.names = FALSE)
+  df_mod[(1:length(genes_tmp)),i] <- genes_tmp
+}
+colnames(df_mod) <- colors_mod
+df_mod <- as.data.frame(df_mod)
+write.csv(df_mod,file=paste0("ROSMAP_",current_area,"_",current_groupname,"_module_unmerged_signed.csv"))
+
+colors_mod <- unique(mergedColors)
+df_mod_merge <- matrix(data=NA,ncol=length(colors_mod),nrow=max(table(mergedColors)))
+for(i in 1:length(colors_mod)){
+  col_tmp <- colors_mod[i]
+  genes_tmp <- colnames(data_WGCNA)[mergedColors == col_tmp]
+  gene_enrichment <- enricher(gene=genes_tmp, TERM2GENE = wp2gene_GO)
+  print(paste0("current color: ",col_tmp))
+  print(head(gene_enrichment[,c("ID","p.adjust","Count","geneID")]))
+  write.csv(x=gene_enrichment,file=paste0(mf_merge_dir,"/",col_tmp,"_signed_merged_functionAnnotation",current_area,"_",current_groupname,".csv"), row.names = FALSE)
+  df_mod_merge[(1:length(genes_tmp)),i] <- genes_tmp
+}
+colnames(df_mod_merge) <- colors_mod
+df_mod_merge <- as.data.frame(df_mod_merge)
+write.csv(df_mod_merge,file=paste0("ROSMAP_",current_area,"_",current_groupname,"_module_merge.csv"), row.names = FALSE)
+```
+
+## Merged MEtree
+```{r}
+
+plot(METree, 
+     main = "Clustering of module eigengenes",
+     xlab = "", 
+     sub = "")
+# 在聚类图中画出剪切线
+abline(h=MEDissThres, col = "red")
+```
+
+```{r}
+table(mergedColors)
+```
+
+### 4.6 Output final module Summaries
+```{r}
+#rownames(MEs)<-paste0("ROSMAP_NCI",rownames(data_ROSMAPmt_NCI2))
+write.table(MEs, file=paste0("ROSMAP_ME_output_",current_area,"_",current_groupname,".csv"),sep=",")
+#write out final modules
+write.table(table(mergedColors), file=paste0("ROSMAP_modules",current_area,"_",current_groupname,".csv"), sep=",")
+
+```
+
+
+
+
+
+
+
+
+
+
+
