@@ -51,12 +51,10 @@ suppressPackageStartupMessages({
 # Load R packages required
 # For data processing
 library("readxl")
-library("tximport")
-library("DESeq2")
 library("writexl")
-#library("apeglm")
-library("ashr")
-# For plotting
+library("openxlsx")
+
+  # For plotting
 library("ggplot2")
 library("gridExtra")
 library("corrplot")
@@ -72,8 +70,6 @@ library("stringr")
 library("tidyverse")
 # For GSEA analysis and visualization
 library("msigdbr")
-library("org.Rn.eg.db")
-library("org.Mm.eg.db")
 library("org.Hs.eg.db")
 library("clusterProfiler")
 library("ggstance")
@@ -91,7 +87,6 @@ library("factoextra")
 library("WGCNA")
 library("cluster")
 library("flashClust")
-library("openxlsx")
 })
 
 ```
@@ -356,8 +351,10 @@ dynamicColors = labels2colors(dynamicMods)
 # Plot the resulting clustering tree (dendrogram)
 #windows()
 # Plot the dendrogram and colors underneath
+getwd()
 {
-pdf(paste0("Gene dendrogram and module colors before merge (",current_groupname,"_",current_area,").pdf"), height=10, width=15)
+  #file.path(outputDir,paste0("Gene dendrogram and module colors before merge (",current_groupname,"_",current_area,").pdf"))
+pdf(file.path(outputDir,paste0("Gene dendrogram and module colors before merge (",current_groupname,"_",current_area,").pdf")), height=10, width=15)
 plotDendroAndColors(geneTree, dynamicColors, "Dynamic Tree Cut",
                     dendroLabels = FALSE, hang = 0.03,
                     addGuide = TRUE, guideHang = 0.05,
@@ -405,7 +402,7 @@ for(i in c(1:length(colors_mod))){
 }
 #geneTree$labels[dynamicColors=="tan"]
 df_mod <- df_mod[2:dim(df_mod)[1],]
-write.csv(x=df_mod,file=paste0("modules_",maptype,"_unmerged_functionAnnotation",current_area,"_",current_groupname,".csv"), row.names = FALSE)
+write.csv(x=df_mod,file=file.path(outputDir,paste0("modules_",maptype,"_unmerged_functionAnnotation",current_area,"_",current_groupname,".csv")), row.names = FALSE)
 head(df_mod)
 ```
 
@@ -428,7 +425,7 @@ sizeGrWindow(9,9)
 plotDiss = selectTOM^softPower; 
 diag(plotDiss) = NA; 
 {
-  pdf(paste0("Gene dendrogram and heatmap before merge (",current_groupname,"_",current_area,").pdf"), height=10, width=15)
+  pdf(file.path(outputDir,paste0("Gene dendrogram and heatmap before merge (",current_groupname,"_",current_area,").pdf")), height=10, width=15)
 
   TOMplot(plotDiss, 
         selectTree, 
@@ -445,7 +442,7 @@ diag(plotDiss) = NA;
 ### 4.1 set the MEDissThres as the threshold based on the cluster tree
 
 ```{r}
-pdf(paste0("Clustering of module eigengene before merge_",current_groupname,".pdf"), height=10, width=15)
+pdf(file.path(outputDir,paste0("Clustering of module eigengene before merge_",current_groupname,".pdf")), height=10, width=15)
 
 {
 plot(METree, main = "Clustering of module eigengenes",
@@ -483,7 +480,7 @@ Save the plot
 ```{r}
 #pdf("4-Clustering of module eigengene_MCI.pdf", height=6, width=9)
 
-pdf(paste0("Clustering of module eigengene (",current_area,"_",current_groupname,")_sample.pdf"), height=10, width=15)
+pdf(file.path(outputDir,paste0("Clustering of module eigengene (",current_area,"_",current_groupname,")_sample.pdf")), height=10, width=15)
 plotDendroAndColors(geneTree, cbind( mergedColors),
                     c( "Module Color"),dendroLabels = FALSE, hang = 0.03,
                     addGuide = TRUE, guideHang = 0.05)
@@ -510,7 +507,7 @@ sizeGrWindow(9,9)
 plotDiss = selectTOM^softPower; 
 diag(plotDiss) = NA; 
 {
-    pdf(paste0("Gene dendrogram and heatmap after merge (",current_area,"_",current_groupname,").pdf"), height=11, width=10)
+    pdf(file.path(outputDir,paste0("Gene dendrogram and heatmap after merge (",current_area,"_",current_groupname,").pdf")), height=11, width=10)
     TOMplot(plotDiss, 
         selectTree, 
         selectColors, 
