@@ -20,7 +20,6 @@ params:
   MEDissThres: 0.4
   maptype: signed
   outputDir: "."
-  wdir: "."
 
 fontsize: 11pt
 geometry: margin=1in
@@ -98,7 +97,7 @@ dataFile <- params$dataFile
 projectName <- params$projectName
 
 dataDir <- params$dataDir
-wdir <- params$wdir
+#wdir <- params$wdir
 powerEstimate <- params$powerEstimate
 thresholdZ.k <- params$thresholdZ
 MEDissThres <- params$MEDissThres
@@ -544,8 +543,8 @@ unique(mergedColors)
 
 colors_mod <- unique(dynamicColors)
 df_mod <- matrix(data=NA,ncol=length(colors_mod),nrow=max(table(dynamicColors)))
-mf_unmerge_dir <- file.path(wdir,"moduleFunctions_unmerge")
-mf_merge_dir <- file.path(wdir,"moduleFunctions_merge")
+mf_unmerge_dir <- file.path(outDir,"moduleFunctions_unmerge")
+mf_merge_dir <- file.path(outDir,"moduleFunctions_merge")
 if (!dir.exists(mf_unmerge_dir)) {dir.create(mf_unmerge_dir)}#wdir
 if (!dir.exists(mf_merge_dir)) {dir.create(mf_merge_dir)}
 
