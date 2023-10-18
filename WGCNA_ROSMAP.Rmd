@@ -563,7 +563,7 @@ for(i in 1:length(colors_mod)){
 }
 colnames(df_mod) <- colors_mod
 df_mod <- as.data.frame(df_mod)
-write.csv(df_mod,file=paste0("ROSMAP_",current_area,"_",current_groupname,"_module_unmerged_signed.csv"))
+write.csv(df_mod,file=file.path(outputDir,paste0("ROSMAP_",current_area,"_",current_groupname,"_module_unmerged_signed.csv")))
 
 colors_mod <- unique(mergedColors)
 df_mod_merge <- matrix(data=NA,ncol=length(colors_mod),nrow=max(table(mergedColors)))
@@ -578,7 +578,7 @@ for(i in 1:length(colors_mod)){
 }
 colnames(df_mod_merge) <- colors_mod
 df_mod_merge <- as.data.frame(df_mod_merge)
-write.csv(df_mod_merge,file=paste0("ROSMAP_",current_area,"_",current_groupname,"_module_merge.csv"), row.names = FALSE)
+write.csv(df_mod_merge,file=file.path(outputDir,paste0("ROSMAP_",current_area,"_",current_groupname,"_module_merge.csv")), row.names = FALSE)
 ```
 
 ## Merged MEtree
@@ -599,9 +599,9 @@ table(mergedColors)
 ### 4.6 Output final module Summaries
 ```{r}
 #rownames(MEs)<-paste0("ROSMAP_NCI",rownames(data_ROSMAPmt_NCI2))
-write.table(MEs, file=paste0("ROSMAP_ME_output_",current_area,"_",current_groupname,".csv"),sep=",")
+write.table(MEs, file=file.path(outputDir,paste0("ROSMAP_ME_output_",current_area,"_",current_groupname,".csv")),sep=",")
 #write out final modules
-write.table(table(mergedColors), file=paste0("ROSMAP_modules",current_area,"_",current_groupname,".csv"), sep=",")
+write.table(table(mergedColors), file=file.path(outputDir,paste0("ROSMAP_modules",current_area,"_",current_groupname,".csv")), sep=",")
 
 ```
 
