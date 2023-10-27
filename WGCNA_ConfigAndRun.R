@@ -46,6 +46,13 @@ current_groups <- c("NCI.F.APOE33","AD.F.APOE33")
 current_groupname <- "F_APOE34"
 current_groups <- c("NCI.F.APOE34","AD.F.APOE34") 
 
+current_groupname <- "M_APOE34"
+current_groups <- c("NCI.M.APOE34","AD.M.APOE34") 
+
+current_groupname <- "M_APOE33"
+current_groups <- c("NCI.M.APOE33","AD.M.APOE33")
+
+
 projectName=paste0("WGCNA_ROSMAP_",current_groupname)
 
 ### Data Dir where lcpm_WithoutFactors_ROSMAP.Rdata and x_normalized_ROSMAP.Rdata are located

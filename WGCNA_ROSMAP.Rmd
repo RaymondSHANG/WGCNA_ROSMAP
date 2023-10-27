@@ -49,11 +49,11 @@ options(DT.options = list(columnDefs = list(list(className = 'dt-center', target
 suppressPackageStartupMessages({
 # Load R packages required
 # For data processing
-library("readxl")
-library("writexl")
-library("openxlsx")
+#library("readxl")
+#library("writexl")
+#library("openxlsx")
 
-  # For plotting
+# For plotting
 library("ggplot2")
 library("gridExtra")
 library("corrplot")
@@ -61,7 +61,7 @@ library("RColorBrewer")
 library("pheatmap")
 library("gplots")
 library("ggh4x")
-## For PCA
+# For PCA
 library("FactoMineR")
 #library("")
 # For stringr wrangling
@@ -69,8 +69,8 @@ library("stringr")
 library("tidyverse")
 # For GSEA analysis and visualization
 library("msigdbr")
-library("org.Hs.eg.db")
-library("clusterProfiler")
+#library("org.Hs.eg.db")
+#library("clusterProfiler")
 library("ggstance")
 # For rendering
 library("htmltools")
@@ -405,7 +405,7 @@ write.csv(x=df_mod,file=file.path(outputDir,paste0("modules_",maptype,"_unmerged
 head(df_mod)
 ```
 
-### 3.3 Select 400 random genes for the toppology overlap heatmap, deep yellow and red means highly topology overlapped。
+### 3.4 Select 400 random genes for the toppology overlap heatmap, deep yellow and red means highly topology overlapped。
 ```{r}
 nGenes = length(gene_symbol)
 # toppology overlap heatmap：
@@ -432,6 +432,11 @@ diag(plotDiss) = NA;
         main = "Network heatmap plot, selected genes") 
   dev.off()
 }
+
+TOMplot(plotDiss, 
+        selectTree, 
+        selectColors, 
+        main = "Network heatmap plot, selected genes") 
 ```
 
 
